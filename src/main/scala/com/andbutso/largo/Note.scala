@@ -62,7 +62,7 @@ case class Note(number: Int) {
   def b     = flat
 
   def moveOctave(offset: Int) = {
-    this + (PitchInterval.octave * offset)
+    this + (PitchInterval.octave.interval * offset)
   }
 
   def ++(noteOffset: PitchInterval) = {
@@ -255,7 +255,7 @@ case class MajorScale(tonicKeyNote: Pitch) {
 }
 
 case class Pitch(
-  letter: Symbol,
+  letter: Char,
   accidental: Accidental.Value = Natural
 ) {
   def ♯ = {
@@ -285,6 +285,18 @@ case class Pitch(
   def -(semiTone: SemiTone): Pitch = {
     PitchClass.moveDownFrom(this, semiTone)
   }
+
+  override def toString = {
+    val accidentalString = accidental match {
+      case Sharp       => "♯"
+      case Flat        => "♭"
+      case Natural     => ""
+      case DoubleFlat  => "♭♭" // N.B. Double flat unicode doesn't work in IntelliJ
+      case DoubleSharp => "♯♯" // N.B. Double sharp unicode doesn't work either
+    }
+
+    s"$letter$accidentalString"
+  }
 }
 
 object Triad extends Enumeration {
@@ -292,13 +304,13 @@ object Triad extends Enumeration {
 }
 
 object Pitch {
-  val C = Pitch('C)
-  val D = Pitch('D)
-  val E = Pitch('E)
-  val F = Pitch('F)
-  val G = Pitch('G)
-  val A = Pitch('A)
-  val B = Pitch('B)
+  val C = Pitch('C')
+  val D = Pitch('D')
+  val E = Pitch('E')
+  val F = Pitch('F')
+  val G = Pitch('G')
+  val A = Pitch('A')
+  val B = Pitch('B')
 }
 
 import Pitch._

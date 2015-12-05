@@ -33,21 +33,11 @@ import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
 
 object Note {
   val C  = Note(60)
-  val Cs = C.sharp
-  val Db = Cs
   val D  = Note(62)
-  val Ds = D.sharp
-  val Eb = Ds
   val E  = Note(64)
   val F  = Note(65)
-  val Fs = F.sharp
-  val Gb = Fs
   val G  = Note(67)
-  val Gs = G.sharp
-  val Ab = Gs
   val A  = Note(69)
-  val As = A.sharp
-  val Bb = As
   val B  = Note(71)
 }
 

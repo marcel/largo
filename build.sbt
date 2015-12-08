@@ -15,4 +15,5 @@ scalacOptions in Test ++= Seq("-Yrangepos")
 
 initialCommands := """
 import com.andbutso.largo._
+import Pitch._
 """

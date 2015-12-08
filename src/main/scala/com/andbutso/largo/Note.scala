@@ -3,153 +3,9 @@ package com.andbutso.largo
 import javax.sound.midi.{MidiSystem, MidiChannel}
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors}
 
-// MIDI_note_number    Name in music    Notes
-// ----------------    -------------    --------------------------
-//  21                 A0               lowest note on an 88-key piano
-//   .                 .                .
-//   .                 .                .
-//   .                 .                .
-//  57                 A3               has a frequency of 220 Hertz
-//  58                 A3# = B3b
-//  59                 B3
-//  60                 C4               "middle C"; start of 4th octave
-//  61                 C4# = D4b
-//  62                 D4
-//  63                 D4# = E4b
-//  64                 E4
-//  65                 F4
-//  66                 F4# = G4b
-//  67                 G4
-//  68                 G4# = A4b
-//  69                 A4               "concert A"; has a frequency of 440 Hertz
-//  70                 A4# = B4b
-//  71                 B4
-//  72                 C5               "concert C"; start of 5th octave
-//  73                 C5# = D5b
-//   .                 .                .
-//   .                 .                .
-//   .                 .                .
-// 108                 C8               highest note on an 88-key piano
-
-object Note {
-//  val all = IndexedSeq(
-//    C,
-//
-//  )
-
-  val C  = Note(60) // Middle C
-  val D  = Note(62)
-  val E  = Note(64)
-  val F  = Note(65)
-  val G  = Note(67)
-  val A  = Note(69)
-  val B  = Note(71)
-}
-//
-//import Note._
-//
-//object ChromaticScale extends Scale(
-//  Seq(C, C.sharp, D, D.sharp, E, F, F.sharp, G, G.sharp, A, A.sharp, B)
-//) {
-//
-//}
-
-// TODO Note should include duration; this is currently just a Pitch
-case class Note(number: Int) {
-  def sharp = this + 1
-  def s     = sharp
-  def flat  = this - 1
-  def b     = flat
-
-  def moveOctave(offset: Int) = {
-    this + (PitchInterval.octave.interval * offset)
-  }
-
-  def ++(noteOffset: PitchInterval) = {
-    noteOffset.offsets.foldLeft(Seq(this)) { case (notes, offset) =>
-      notes :+ (notes.last + offset.interval)
-    }
-  }
-
-  def +(offset: Int) = {
-    Note(number + offset)
-  }
-
-  def -(offset: Int) = {
-    Note(number - offset)
-  }
-
-//  def majorChord = {
-//    majorScale.chord
-//  }
-//
-//  def majorScale = {
-//    Scale(this ++ PitchInterval.majorScale)
-//  }
-//
-//  def minorScale = {
-//    Scale(this ++ PitchInterval.minorScale)
-//  }
-//
-//  def minorChord = {
-//    minorScale.chord
-//  }
-}
+import scala.annotation.tailrec
 
 // TODO DiatonicScale
-//case class Scale(notes: Seq[Note]) {
-//  def chord = {
-//    val scale = notes.toIndexedSeq
-//    Chord(PitchInterval.triad map { index => scale(index) })
-//  }
-//}
-
-class PlayerPiano {
-  val synth = MidiSystem.getSynthesizer
-  synth.open()
-
-  val channels = new ConcurrentLinkedQueue[MidiChannel]
-  synth.getChannels.take(8) foreach { channel =>
-    channels.offer(channel)
-  }
-
-  val pool = Executors.newFixedThreadPool(channels.size())
-
-  val defaultVolume = 80
-  val defaultDuration = 200 // Milliseconds
-
-  def onChannel[T](handler: MidiChannel => T): Unit = {
-    pool.execute(
-      new Runnable {
-        override def run(): Unit = {
-          val channel = channels.poll()
-          handler(channel)
-          channels.offer(channel)
-        }
-      }
-    )
-  }
-  def play(notes: Seq[Note], duration: Int = defaultDuration): Unit = {
-    onChannel { channel =>
-      notes foreach { note =>
-        channel.noteOn(note.number, defaultVolume)
-        Thread.sleep(duration)
-        channel.noteOff(note.number)
-      }
-    }
-  }
-
-  def play(chord: Chord, duration: Int): Unit = {
-    onChannel { channel =>
-      chord.notes foreach { note =>
-        channel.noteOn(note.number, defaultVolume)
-      }
-
-      Thread.sleep(duration)
-      channel.allNotesOff()
-    }
-  }
-}
 
 case class PitchInterval(offsets: Seq[SemiTone])
 
@@ -186,16 +42,16 @@ object PitchInterval {
   val diminishedOctave  = majorSeventh      // C♭
   val augmentedSeventh  = SemiTone(12)      // B♯
   val octave            = augmentedSeventh  // C             VIII
+}
 
-//  val triad = Seq(0, 2, 4)
-  object Triad {
-    val major = Seq()
-    val minor = Seq()
-    val diminished = Seq()
-    val augmented = Seq()
-  }
+object Accidental extends Enumeration {
+  val Natural, Sharp, Flat, DoubleSharp, DoubleFlat = Value
+}
 
-  val majorScale = PitchInterval(
+object Scale {
+  import PitchInterval._
+
+  val major = PitchInterval(
     Seq(
       wholeTone, // Supertonic
       wholeTone, // Mediant
@@ -203,18 +59,36 @@ object PitchInterval {
       wholeTone, // Dominant
       wholeTone, // Submediant
       wholeTone, // Leading tone
-      halfTone   // Tonic
+      halfTone   // Tonic / Octave
     )
   )
   // TODO Natural minor scale vs harmonic minor scale (https://en.wikipedia.org/wiki/Minor_scale)
-  val minorScale = PitchInterval(Seq(wholeTone, halfTone, wholeTone, wholeTone, halfTone, wholeTone, wholeTone))
+  val minor = PitchInterval(
+    Seq(
+      wholeTone,
+      halfTone,
+      wholeTone,
+      wholeTone,
+      halfTone,
+      wholeTone,
+      wholeTone
+    )
+  )
 }
 
-case class Chord(notes: Seq[Note])
-
-object Accidental extends Enumeration {
-  val Natural, Sharp, Flat, DoubleSharp, DoubleFlat = Value
+abstract class Scale(tonicKeyNote: Note, intervalsFromTonicKeyNote: PitchInterval) {
+  val degrees = tonicKeyNote ++ intervalsFromTonicKeyNote
+  def supertonic  = degrees(1)
+  def mediant     = degrees(2)
+  def subdominant = degrees(3)
+  def dominant    = degrees(4)
+  def submediant  = degrees(5)
+  def leadingTone = degrees(6)
+  def octave      = degrees(7)
 }
+
+case class MajorScale(tonicKeyNote: Note) extends Scale(tonicKeyNote, Scale.major)
+case class MinorScale(tonicKeyNote: Note) extends Scale(tonicKeyNote, Scale.minor)
 
 import Accidental._
 
@@ -238,21 +112,77 @@ case class Key(pitch: Pitch) {
   val chords = major ++ minor ++ diminished
 }
 
-case class MajorScale(tonicKeyNote: Pitch) {
-  import PitchInterval.{halfTone, wholeTone}
+object Triad {
+  import PitchInterval._
 
-  val supertonic  = tonicKeyNote + wholeTone
-  val mediant     = supertonic   + wholeTone
-  val subdominant = mediant      + halfTone
-  val dominant    = subdominant  + wholeTone
-  val submediant  = dominant     + wholeTone
-  val leadingTone = submediant   + wholeTone
-  val tonic       = leadingTone  + halfTone
+  val major = PitchInterval(
+    Seq(
+      majorThird, // 4 semitones from root
+      minorThird  // perfect fifth, 7 semitones from root
+    )
+  )
 
-  val pitches = Seq(
-    tonicKeyNote, supertonic, mediant, subdominant, dominant, submediant, leadingTone, tonic
+  val minor = PitchInterval(
+    Seq(
+      minorThird, // 3 semitones from root
+      majorThird  // perfect fifth, 7 semitones from root
+    )
+  )
+
+  val diminished = PitchInterval(
+    Seq(
+      minorThird, // 3 semitones from root
+      minorThird  // diminished fifth, 6 semitones from root
+    )
+  )
+
+  val augmented = PitchInterval(
+    Seq(
+      majorThird, // 4 semitones from root
+      majorThird  // augmented fifth, 8 semitones from root
+    )
   )
 }
+
+case class Triad(notes: IndexedSeq[Note]) {
+  def root  = notes(0)
+  def third = notes(1)
+  def fifth = notes(2)
+}
+
+// TODO Implement all
+// https://en.wikipedia.org/wiki/Seventh_chord
+//
+// Tertian:
+// Cmaj⁷   — Major seventh
+// Cmin⁷   — Minor seventh
+// C⁷      — Dominant seventh
+// C°⁷     — Diminished seventh
+// Cm⁷     — Half-diminished seventh
+// Cm maj⁷ - Minor major seventh
+// Cmaj⁷⁽⁵⁾  – Augmented major seventh
+//
+// Non-tertian:
+// Caug⁷   — Augmented seventh
+// CmM7♭5 — Diminished major seventh
+// C7♭5   — Dominant seventh flat five
+case class Seventh(triad: Triad, seventh: Note)
+
+//case class MajorScale(tonicKeyNote: Pitch) {
+//  import PitchInterval.{halfTone, wholeTone}
+//
+//  val supertonic  = tonicKeyNote + wholeTone
+//  val mediant     = supertonic   + wholeTone
+//  val subdominant = mediant      + halfTone
+//  val dominant    = subdominant  + wholeTone
+//  val submediant  = dominant     + wholeTone
+//  val leadingTone = submediant   + wholeTone
+//  val tonic       = leadingTone  + halfTone
+//
+//  val pitches = Seq(
+//    tonicKeyNote, supertonic, mediant, subdominant, dominant, submediant, leadingTone, tonic
+//  )
+//}
 
 case class Pitch(
   letter: Char,
@@ -268,6 +198,10 @@ case class Pitch(
 
   def ♮ = {
     copy(accidental = Natural)
+  }
+
+  def |(octave: Octave) = {
+    Note(this, octave)
   }
 
   def +(number: Int): Pitch = {
@@ -286,6 +220,10 @@ case class Pitch(
     PitchClass.moveDownFrom(this, semiTone)
   }
 
+  def interval(pitch: Pitch) = {
+    SemiTone(PitchClass.indexOf(pitch) - PitchClass.indexOf(this))
+  }
+
   override def toString = {
     val accidentalString = accidental match {
       case Sharp       => "♯"
@@ -299,10 +237,6 @@ case class Pitch(
   }
 }
 
-object Triad extends Enumeration {
-  val Major, Minor, Diminished, Augmented = Value
-}
-
 object Pitch {
   val C = Pitch('C')
   val D = Pitch('D')
@@ -311,6 +245,13 @@ object Pitch {
   val G = Pitch('G')
   val A = Pitch('A')
   val B = Pitch('B')
+
+  object Frequency {
+    val C0 = 16.35D
+    val A4 = 440.0D
+    val ConcertPitch = A4
+    val B8 = 7902.13D
+  }
 }
 
 import Pitch._
@@ -348,14 +289,263 @@ case class PitchClass(pitches: IndexedSeq[Pitch]) {
     pitches(destination)
   }
 
-  def indexOf(pitch: Pitch) = {
+  def moveFrom(pitch: Pitch, semiTone: SemiTone) = {
+    semiTone.interval match {
+      case 0 =>
+        pitch
+      case interval if interval > 0 =>
+        moveUpFrom(pitch, semiTone)
+      case interval =>
+        moveDownFrom(pitch, SemiTone(-semiTone.interval))
+    }
+  }
+
+  @tailrec
+  final def indexOf(pitch: Pitch): Int = {
     pitch.accidental match {
       case Flat =>
-        indexes(pitch♮) - 1 // TODO Doesn't work for C♭
+        val natural = pitch.♮
+        val index   = indexes(natural)
+        if (index != 0) {
+          indexes(natural) - 1
+        } else {
+          indexOf(B)
+        }
       case _ =>
         indexes(pitch)
     }
   }
 }
 
+// Octave is two notes that have a frequency ration of 2:1
+// Octave spans 12 semitones or 1200 cents
+
+// TODO Extract these to locations that suit each as their umbrella abstractions are implemented
+object MiscConversion {
+
+}
+
+object SemiTone {
+  val cents = 1200
+  val perOctave = 12
+
+  // e.g.
+  //  val freqA = 130.81 (C3)
+  //  val freqB = 261.63 (C4)
+  //  intervalBetweenFrequencies(freqA, freqB)
+  //  => SemiTone(12)
+  def intervalBetweenFrequencies(freqA: Hertz, freqB: Hertz) = {
+    SemiTone(Math.round(cents * Frequency.logarithmicRatio(freqA, freqB) / 100).toInt)
+  }
+
+  implicit def fromSemiToneToInt(semiTone: SemiTone): Int = semiTone.interval
+  implicit def fromIntToSemiTone(int: Int): SemiTone      = SemiTone(int)
+}
+
 case class SemiTone(interval: Int)
+
+// MIDI note number    Name in music    Notes
+// ----------------    -------------    --------------------------
+//  21                 A0               lowest note on an 88-key piano
+//   .                 .                .
+//   .                 .                .
+//   .                 .                .
+//  57                 A3               has a frequency of 220 Hertz
+//  58                 A3# = B3b
+//  59                 B3
+//  60                 C4               "middle C"; start of 4th octave
+//  61                 C4# = D4b
+//  62                 D4
+//  63                 D4# = E4b
+//  64                 E4
+//  65                 F4
+//  66                 F4# = G4b
+//  67                 G4
+//  68                 G4# = A4b
+//  69                 A4               "concert A"; has a frequency of 440 Hertz
+//  70                 A4# = B4b
+//  71                 B4
+//  72                 C5               "concert C"; start of 5th octave
+//  73                 C5# = D5b
+//   .                 .                .
+//   .                 .                .
+//   .                 .                .
+// 108                 C8               highest note on an 88-key piano
+object Midi {
+  object Note {
+    val ZeroInHertz = 8.1758
+    
+    val ConcertPitch = 69 // A4
+
+    def octavesFromConcertPitch(frequency: Hertz) = {
+      Frequency.logarithmicRatio(Pitch.Frequency.ConcertPitch, frequency)
+    }
+
+    def fromFrequency(frequency: Hertz) = {
+      Note(
+        Math.round(
+          ConcertPitch + (SemiTone.perOctave * octavesFromConcertPitch(frequency))
+        ).toInt
+      )
+    }
+  }
+
+  case class Note(number: Int) {
+    def ♯ = Note(number + 1)
+    def ♭ = Note(number - 1)
+
+    def toFrequency = {
+      val deltaFromConcertPitch = number - Note.ConcertPitch
+      val rawHertz = Math.pow(2, deltaFromConcertPitch / SemiTone.perOctave.toFloat) * Pitch.Frequency.ConcertPitch
+      Math.round(rawHertz * 100) / 100.0 // Round to 2 places
+    }
+
+    //  def majorChord = {
+    //    majorScale.chord
+    //  }
+    //
+    //
+    //  def minorChord = {
+    //    minorScale.chord
+    //  }
+  }
+
+  case class Chord(notes: Seq[Midi.Note])
+
+  class Player {
+    val synth = MidiSystem.getSynthesizer
+    synth.open()
+
+    val channels = new ConcurrentLinkedQueue[MidiChannel]
+    synth.getChannels.take(8) foreach { channel =>
+      channels.offer(channel)
+    }
+
+    val pool = Executors.newFixedThreadPool(channels.size())
+
+    val defaultVolume = 80
+    val defaultDuration = 200 // Milliseconds
+
+    def onChannel[T](handler: MidiChannel => T): Unit = {
+      pool.execute(
+        new Runnable {
+          override def run(): Unit = {
+            val channel = channels.poll()
+            handler(channel)
+            channels.offer(channel)
+          }
+        }
+      )
+    }
+    def play(notes: Seq[Midi.Note], duration: Int = defaultDuration): Unit = {
+      onChannel { channel =>
+        notes foreach { note =>
+          channel.noteOn(note.number, defaultVolume)
+          Thread.sleep(duration)
+          channel.noteOff(note.number)
+        }
+      }
+    }
+
+    def play(chord: Chord, duration: Int): Unit = {
+      onChannel { channel =>
+        chord.notes foreach { note =>
+          channel.noteOn(note.number, defaultVolume)
+        }
+
+        Thread.sleep(duration)
+        channel.allNotesOff()
+      }
+    }
+  }
+}
+
+object Note {
+  val all = Octave.Min.to(Octave.Max).flatMap { octave =>
+    PitchClass.pitches.map { pitch =>
+      Note (pitch, octave)
+    }
+  }
+
+  val ConcertPitch = Note(A, 4)
+
+  def fromFrequency(frequency: Hertz) = {
+
+  }
+}
+
+case class Note(pitch: Pitch, octave: Octave) extends Ordered[Note] {
+  def toFrequency = {
+    val intervalFromConcertPitch = Note.ConcertPitch.interval(this)
+    Pitch.Frequency.ConcertPitch * Math.pow(Octave.TwelthRootOf2, intervalFromConcertPitch.interval)
+  }
+
+  def index = {
+    PitchClass.indexOf(pitch) + (octave.value * SemiTone.perOctave)
+  }
+
+  override def equals(obj: Any) = {
+    obj match {
+      case o: Note => o.index.equals(index)
+      case _ => false
+    }
+  }
+
+  override def hashCode = index.hashCode()
+
+  def interval(otherNote: Note) = {
+    val octaveInterval = octave.interval(otherNote.octave) * SemiTone.perOctave
+    SemiTone(pitch.interval(otherNote.pitch).interval + octaveInterval)
+  }
+
+  def compare(otherNote: Note) = {
+    0.compare(interval(otherNote).interval)
+  }
+
+  def +(interval: SemiTone) = {
+    Note.all(index + interval.interval)
+  }
+
+  def ++(intervals: PitchInterval) = {
+    intervals.offsets.foldLeft(IndexedSeq(this)) { case (notes, offset) =>
+      notes :+ (notes.last + offset.interval)
+    }
+  }
+
+  def majorScale = {
+    this ++ PitchInterval.majorScale
+  }
+
+  def minorScale = {
+    this ++ PitchInterval.minorScale
+  }
+
+  override def toString = {
+    s"$pitch${octave.value}"
+  }
+}
+
+object Octave {
+  val TwelthRootOf2 = Math.pow(2, 1/12.0)
+  val Min = 0
+  val Max = 8
+
+  implicit def fromOctaveToInt(octave: Octave): Int = octave.value
+  implicit def fromIntToOctave(int: Int): Octave    = Octave(int)
+}
+
+case class Octave(value: Int) {
+  require(value >= Octave.Min && value <= Octave.Max, s"$value out of bounds")
+
+  def interval(octave: Octave) = {
+    octave.value - value
+  }
+
+  def apply(pitch: Pitch) = {
+    Note(pitch, this)
+  }
+}
+
+// TODO
+// KeySignature
+// TimeSignature

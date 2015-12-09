@@ -324,7 +324,7 @@ case class Pitch(
     copy(accidental = Natural)
   }
 
-  def |(octave: Octave) = {
+  def apply(octave: Octave) = {
     Note(this, octave)
   }
 

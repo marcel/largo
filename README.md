@@ -1,3 +1,3 @@
 # largo
 
-Western music in code
+Western music

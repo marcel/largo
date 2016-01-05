@@ -333,7 +333,7 @@ case class Pitch(
   }
 
   def +(semiTone: SemiTone): Pitch = {
-    PitchClass.moveUpFrom(this, semiTone)
+    CircularPitchClass.moveUpFrom(this, semiTone)
   }
 
   def -(number: Int): Pitch = {
@@ -341,11 +341,11 @@ case class Pitch(
   }
 
   def -(semiTone: SemiTone): Pitch = {
-    PitchClass.moveDownFrom(this, semiTone)
+    CircularPitchClass.moveDownFrom(this, semiTone)
   }
 
   def interval(pitch: Pitch) = {
-    SemiTone(PitchClass.indexOf(pitch) - PitchClass.indexOf(this))
+    SemiTone(CircularPitchClass.indexOf(pitch) - CircularPitchClass.indexOf(this))
   }
 
   override def toString = {
@@ -371,16 +371,27 @@ object Pitch {
   val B = Pitch('B')
 
   object Frequency {
-    val C0 = 16.35D
-    val A4 = 440.0D
-    val ConcertPitch = A4
-    val B8 = 7902.13D
+    val ConcertPitch = 440.0d
   }
 }
 
 import Pitch._
 
-object PitchClass extends PitchClass(
+object PitchSpace extends PitchSpace(
+  Octave.Min.to(Octave.Max).flatMap { octave =>
+    CircularPitchClass.pitches.map { pitch =>
+      Note(pitch, octave)
+    }
+  }
+)
+
+case class PitchSpace(pitches: IndexedSeq[Note]) {
+  def apply(index: Int) = {
+    pitches(index)
+  }
+}
+
+object CircularPitchClass extends CircularPitchClass(
   IndexedSeq(
     C,
     C♯,
@@ -397,7 +408,7 @@ object PitchClass extends PitchClass(
   )
 )
 
-case class PitchClass(pitches: IndexedSeq[Pitch]) {
+case class CircularPitchClass(pitches: IndexedSeq[Pitch]) {
   val indexes = pitches.zipWithIndex.toMap
 
   def moveUpFrom(pitch: Pitch, semiTone: SemiTone) = {
@@ -461,17 +472,27 @@ object SemiTone {
 case class SemiTone(interval: Int)
 
 object Note {
-  val all = Octave.Min.to(Octave.Max).flatMap { octave =>
-    PitchClass.pitches.map { pitch =>
-      Note (pitch, octave)
-    }
-  }
-
-  val ConcertPitch = Note(A, 4)
+  val ConcertPitch = A(4)
 
   def fromFrequency(frequency: Hertz) = {
-
   }
+
+  object Duration {
+    case object Large                extends Note.Value(8)
+    case object Long                 extends Note.Value(4)
+    case object DoubleWhole          extends Note.Value(2)
+    case object Whole                extends Note.Value(1)
+    case object Half                 extends Note.Value(1/2.0)
+    case object Quarter              extends Note.Value(1/4.0)  // ♩
+    case object Eighth               extends Note.Value(1/8.0)  // ♪, ♫
+    case object Sixteenth            extends Note.Value(1/16.0) // ♬
+    case object ThirtySecond         extends Note.Value(1/32.0)
+    case object SixtyFourth          extends Note.Value(1/64.0)
+    case object HundredTwentyEighth  extends Note.Value(1/128.0)
+    case object TwoHundredFiftySixth extends Note.Value(1/256.0)
+  }
+
+  class Value(val value: Double)
 }
 
 case class Note(pitch: Pitch, octave: Octave) extends Ordered[Note] {
@@ -481,7 +502,7 @@ case class Note(pitch: Pitch, octave: Octave) extends Ordered[Note] {
   }
 
   def index = {
-    PitchClass.indexOf(pitch) + (octave.value * SemiTone.perOctave)
+    CircularPitchClass.indexOf(pitch) + (octave.value * SemiTone.perOctave)
   }
 
   override def equals(obj: Any) = {
@@ -503,7 +524,7 @@ case class Note(pitch: Pitch, octave: Octave) extends Ordered[Note] {
   }
 
   def +(interval: SemiTone) = {
-    Note.all(index + interval.interval)
+    PitchSpace(index + interval.interval)
   }
 
   def ++(intervals: PitchInterval) = {
@@ -522,6 +543,8 @@ case class Note(pitch: Pitch, octave: Octave) extends Ordered[Note] {
     s"$pitch${octave.value}"
   }
 }
+
+// TODO Automatically rewrite chord progressions for optimal voice leading
 
 object Octave {
   val TwelfthRootOf2 = Math.pow(2, 1/12.0)
